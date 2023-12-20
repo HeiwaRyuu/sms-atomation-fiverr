@@ -10,6 +10,7 @@ from utils import *
 
 # SETTING STANDARD CONFIDENCE TO FIND IMAGES
 STANDARD_CONFIDENCE = 0.8
+HIGH_CONFIDENCE = 0.9
 # SETTING STANDARD DELAY TO WAIT FOR THE COMPUTER TO CATCH UP
 STANDARD_DELAY = 1
 
@@ -107,8 +108,6 @@ class Interface(tk.Tk):
     
     # Sending the messages
     def start_sending_messages(self):
-        # Startinf Script message box on new thread (to make the GUI responsive)
-        self.starting_script_message_box_thread()
         path = self.file_path.get()
         sheet_name = int(self.sheet_chooser.get())
         range_name = self.range_text.get()
@@ -116,6 +115,7 @@ class Interface(tk.Tk):
             delay = int(self.delay_text.get())
             if delay < 0:
                 messagebox.showinfo("Information","Delay must be a positive integer!")
+                return
         except:
             messagebox.showinfo("Information","Delay must be a positive integer!")
             return
@@ -129,6 +129,10 @@ class Interface(tk.Tk):
             if answer == False:
                 return
             self.delete_laststopbk_file(path, sheet_name)
+
+        # Startinf Script message box on new thread (to make the GUI responsive)
+        self.starting_script_message_box_thread()
+        time.sleep(STANDARD_DELAY)
         self.start_thread(path, sheet_name, range_name, message, delay)
 
     def starting_script_message_box_thread(self):
@@ -207,7 +211,7 @@ class Interface(tk.Tk):
         try:
             app_desktop_icon = pyautogui.locateOnScreen(os.getcwd() + LINE2_DESKTOP_IMG, confidence=STANDARD_CONFIDENCE)
         except:
-            messagebox.showinfo("Information","Line2 Desktop Icon not found. Please open App.")
+            messagebox.showerror("Error","Line2 Desktop Icon not found. Please open App.")
             return
         pyautogui.moveTo(app_desktop_icon)
         time.sleep(STANDARD_DELAY)
@@ -223,7 +227,7 @@ class Interface(tk.Tk):
             try:
                 messages_icon = pyautogui.locateOnScreen(os.getcwd() + LINE2_BLUE_MESSAGES_IMG, confidence=STANDARD_CONFIDENCE)
             except:
-                messagebox.showinfo("Information","Line2 messages Icon not found. Please try again!")
+                messagebox.showerror("Error","Line2 messages Icon not found. Please try again!")
                 return
         pyautogui.click(messages_icon)
         time.sleep(STANDARD_DELAY)
@@ -238,16 +242,41 @@ class Interface(tk.Tk):
                 print("Stopping...")
                 self.event.clear()
                 return
+            
+            # Checking for too many messages pop up
+            try:
+                too_many_messages_icon = pyautogui.locateOnScreen(os.getcwd() + LINE2_TOO_MANY_MESSAGES_IMG, confidence=STANDARD_CONFIDENCE)
+                if too_many_messages_icon:
+                    pyautogui.click(too_many_messages_icon)
+                    time.sleep(STANDARD_DELAY)
+                    try:
+                        too_many_messages_ok_btn_icon = pyautogui.locateOnScreen(os.getcwd() + LINE2_TOO_MANY_MESSAGES_OK_BTN_IMG, confidence=STANDARD_CONFIDENCE)
+                        pyautogui.moveTo(too_many_messages_ok_btn_icon)
+                        pyautogui.move(20, 20)
+                        time.sleep(STANDARD_DELAY)
+                        pyautogui.click()
+                        print("Closed 'Too many messages' pop up... Waiting until the cooldown resets so we can send new messages...")
+                        # Waiting for X seconds
+                        i = 0
+                        while(i < delay*5 and not self.event.is_set()):
+                            i += 1
+                            time.sleep(STANDARD_DELAY)
+                    except:
+                        messagebox.showerror("Error","Failed to close 'Too many messages' pop up! Please try again!")
+                        return
+            except:
+                print("No 'Too many messages' pop up yet...")
+
             return_status = self.send_message(phone_number, message)
             if return_status is None:
-                messagebox.showinfo("Information","Failed to send message to: " + phone_number + ". Please restart the script!")
+                messagebox.showerror("Error","Failed to send message to: " + phone_number + ". Please restart the script!")
                 # IF SENDING A MESSAGE TO A NUMBER FAILS, THE WHOLE SCRIPT WILL STOP, IF YOU WOULD LIKE IT TO CONTINUE
                 # SENDING MESSAGES DESPITE THE FAILURES, COMMENT THE RETURN STATEMENT BELOW
                 return
             else:
                 print("Sent message to: " + phone_number)
                 saveLastRow(path, sheet_name, last_row + index, phone_number, len(phone_numbers) - 1)
-                # Waiting for 60 seconds
+                # Waiting for X seconds
                 i = 0
                 while(i < delay and not self.event.is_set()):
                     i += 1
@@ -260,7 +289,7 @@ class Interface(tk.Tk):
         try:
             new_message_icon = pyautogui.locateOnScreen(os.getcwd() + LINE2_NEW_MESSAGE_IMG, confidence=STANDARD_CONFIDENCE)
         except:
-            messagebox.showinfo("Information","New message Icon not found. Please Try again!")
+            messagebox.showerror("Error","New message Icon not found. Please Try again!")
             return
         pyautogui.click(new_message_icon)
         time.sleep(STANDARD_DELAY)
@@ -276,8 +305,14 @@ class Interface(tk.Tk):
         # Send message
         pyautogui.press('enter')
 
-        ## WAIT FOR 2 SECONDS (CHANGE DELAY AS YOU LIKE, THIS IS JUST TO MAKE SURE THE APP HAS TIME TO SEND THE MESSAGE)
-        time.sleep(STANDARD_DELAY*2)
+        # Closing last chat to avoid chat windows overload
+        try:
+            close_message_chat_icon = list(pyautogui.locateAllOnScreen(os.getcwd() + LINE2_CLOSE_MESSAGE_CHAT_IMG, confidence=HIGH_CONFIDENCE))[1]
+            time.sleep(STANDARD_DELAY)
+            pyautogui.click(close_message_chat_icon)
+        except:
+            messagebox.showerror("Error","Could not close message chat properly! Try again!")
+            return
 
         return True
 
